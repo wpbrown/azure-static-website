@@ -33,11 +33,13 @@ $addressGroups = ($data.value | ? { $_.name -eq 'Premium_Verizon' }).Properties.
 
 # Prepare new ACLs
 "Processing Delivery Regions: $($addressGroups | select -ExpandProperty deliveryRegion)"
+$invalidPrefixes = 0
 $rules = $addressGroups.ipv4Addresses | % {
     if ($_.prefixLength -eq 32) { $address = $_.baseIpAddress }
     elseif ($_.prefixLength -le 29) { $address = "$($_.baseIpAddress)/$($_.prefixLength)" }
     else { 
-        Write-Error "CDN provided invalid CIDR for storage account firewall."
+        Write-Warning "CDN provided invalid prefix length ($($_.prefixLength)) for storage account firewall."
+        ++$invalidPrefixes
         $address = $null;
     }
 
@@ -49,3 +51,7 @@ $rules = $addressGroups.ipv4Addresses | % {
 # Apply new ACLs
 "Apply Updates: $($rules | % {$_['IPAddressOrRange']})"
 Update-AzureRmStorageAccountNetworkRuleSet -IPRule $rules -AccountName $accountName -ResourceGroupName $resourceGroup > $null
+
+if ($invalidPrefixes) {
+    Write-Error "CDN provided $invalidPrefixes invalid prefixes for storage account firewall."
+}
