@@ -29,12 +29,19 @@ $accessToken = $cachedTokens[0].AccessToken
 $data = Invoke-RestMethod -Method Get `
     -Uri 'https://management.azure.com/providers/Microsoft.Cdn/edgenodes?api-version=2017-10-12' `
     -Headers @{ 'Authorization' = "Bearer $accessToken" }
-$addressGroups = ($data.value | ? { $_.name -eq 'Premium_Verizon' }).Properties.ipAddressGroups
+$regions = ($data.value | Where-Object { $_.name -eq 'Premium_Verizon' }).Properties.ipAddressGroups
+"Processing Delivery Regions: $($regions | Select-Object -ExpandProperty deliveryRegion)"
+$addressGroups = $regions.ipv4Addresses
+
+# Retrieve Traffic Manager Probe IPs
+$data = Invoke-RestMethod -Method Get `
+    -Uri 'https://azuretrafficmanagerdata.blob.core.windows.net/probes/azure/probe-ip-ranges.json'
+$addressGroups += $data.ipv4_prefixes.ip_prefix | ForEach-Object { $parts = $_.Split('/'); `
+    [PSCustomObject]@{ baseIpAddress = $parts[0]; prefixLength = $parts[1] } }
 
 # Prepare new ACLs
-"Processing Delivery Regions: $($addressGroups | select -ExpandProperty deliveryRegion)"
 $invalidPrefixes = 0
-$rules = $addressGroups.ipv4Addresses | % {
+$rules = $addressGroups | ForEach-Object {
     if ($_.prefixLength -eq 32) { $address = $_.baseIpAddress }
     elseif ($_.prefixLength -le 29) { $address = "$($_.baseIpAddress)/$($_.prefixLength)" }
     else { 
@@ -49,7 +56,8 @@ $rules = $addressGroups.ipv4Addresses | % {
 }
 
 # Apply new ACLs
-"Apply Updates: $($rules | % {$_['IPAddressOrRange']})"
+$newRuleCount = ($rules | Measure-Object).Count
+"Apply Updates ($newRuleCount rules): $($rules | ForEach-Object {$_['IPAddressOrRange']})"
 Update-AzureRmStorageAccountNetworkRuleSet -IPRule $rules -AccountName $accountName -ResourceGroupName $resourceGroup > $null
 
 if ($invalidPrefixes) {

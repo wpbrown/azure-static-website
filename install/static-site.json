@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "variables": {
+        "storageAcctName": "storage1810107"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "sku": {
+                "name": "Standard_RAGRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "name": "[variables('storageAcctName')]",
+            "apiVersion": "2018-03-01-preview",
+            "location": "centralus",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "None",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Deny"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "accessTier": "Hot"
+            },
+            "dependsOn": []
+        }
+    ],
+    "outputs": {}
+}
